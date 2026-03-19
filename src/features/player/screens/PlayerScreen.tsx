@@ -1,72 +1,94 @@
-import React, { useState, useEffect } from 'react';
-import { View, Text, StyleSheet, TouchableOpacity, SafeAreaView } from 'react-native';
-import { useWorkoutStore, useUserStore } from '../../../store';
+import React from 'react';
+import { View, Text, StyleSheet, SafeAreaView, TouchableOpacity } from 'react-native';
 import { COLORS, SPACING } from '../../../core/theme/colors';
-import { Play, Pause, SkipForward } from 'lucide-react-native';
+import { Play, Pause, SkipForward, Flame } from 'lucide-react-native';
+import { useWorkoutPlayer } from '../hooks/useWorkoutPlayer';
 
 export const PlayerScreen = ({ navigation }: any) => {
-  const { currentSession, endWorkout } = useWorkoutStore();
-  const incrementStreak = useUserStore(state => state.incrementStreak);
+  const {
+    currentExercise,
+    nextExercise,
+    currentIndex,
+    totalExercises,
+    timeLeft,
+    isActive,
+    isResting,
+    isFinished,
+    streak,
+    skip,
+    togglePause
+  } = useWorkoutPlayer(() => navigation.navigate('WorkoutComplete'));
+
+  // Failsafe rendering state
+  if (isFinished) {
+    return (
+      <SafeAreaView style={styles.container}>
+        <Text style={styles.title}>Loading...</Text>
+      </SafeAreaView>
+    );
+  }
+
+  // Calculate visual width for simple status bar.
+  // Add 1 artificially if resting so the bar reflects "post-exercise" rest phase completion.
+  const progressPercentage = ((currentIndex + (isResting ? 1 : 0)) / totalExercises) * 100;
   
-  const [currentIndex, setCurrentIndex] = useState(0);
-  const [timeLeft, setTimeLeft] = useState(0);
-  const [isActive, setIsActive] = useState(false);
-  const [isResting, setIsResting] = useState(false);
-
-  const currentExercise = currentSession?.exercises[currentIndex];
-  const isFinished = !currentSession || currentIndex >= currentSession.exercises.length;
-
-  useEffect(() => {
-    if (currentExercise && !isResting) {
-      setTimeLeft(currentExercise.defaultDuration);
-    } else if (isResting) {
-      setTimeLeft(15);
-    }
-  }, [currentIndex, isResting, currentExercise]);
-
-  useEffect(() => {
-    let interval: any = null;
-    if (isActive && timeLeft > 0) {
-      interval = setInterval(() => setTimeLeft(t => t - 1), 1000);
-    } else if (isActive && timeLeft === 0) {
-      handleNext();
-    }
-    return () => clearInterval(interval);
-  }, [isActive, timeLeft]);
-
-  const handleNext = () => {
-    if (isResting) {
-      setIsResting(false);
-      setCurrentIndex(i => i + 1);
-    } else {
-      if (currentSession && currentIndex === currentSession.exercises.length - 1) {
-        incrementStreak();
-        endWorkout();
-        navigation.navigate('WorkoutComplete');
-      } else {
-        setIsResting(true);
-      }
-    }
-  };
-
-  if (isFinished) return <View style={styles.container}><Text style={styles.title}>Loading...</Text></View>;
+  // Highlight logic for last 3 seconds
+  const isEnding = timeLeft <= 3 && timeLeft > 0;
 
   return (
     <SafeAreaView style={styles.container}>
+      {/* Top HUD: Psychological triggers and Status */}
       <View style={styles.header}>
-        <Text style={styles.progress}>{currentIndex + 1} / {currentSession?.exercises.length}</Text>
+        <View style={styles.streakBadge}>
+          <Flame color={COLORS.secondary} size={16} />
+          <Text style={styles.streakText}>🔥 {streak} Day Streak</Text>
+        </View>
+        <Text style={styles.progressText}>
+          {currentIndex + 1} / {totalExercises}
+        </Text>
       </View>
+
+      <View style={styles.progressBarContainer}>
+        <View style={[styles.progressBarFill, { width: `${progressPercentage}%` }]} />
+      </View>
+
       <View style={styles.main}>
         <Text style={styles.stateText}>{isResting ? 'REST' : 'WORK'}</Text>
-        <Text style={styles.title}>{isResting ? 'Next: ' + currentSession?.exercises[currentIndex + 1]?.name : currentExercise?.name}</Text>
-        <View style={styles.timerCircle}><Text style={styles.timerText}>{timeLeft}s</Text></View>
-        {!isResting && <Text style={styles.description}>{currentExercise?.description}</Text>}
+        <Text style={styles.title}>{isResting ? 'Recovery' : currentExercise?.name}</Text>
+        
+        {/* Timer UI scales up and turns red near the end */}
+        <View style={[
+          styles.timerCircle, 
+          isEnding && styles.timerCircleEnding,
+          isResting && styles.timerCircleResting
+        ]}>
+          <Text style={[
+            styles.timerText, 
+            isEnding && styles.timerTextEnding
+          ]}>
+            {timeLeft}s
+          </Text>
+        </View>
+
+        {!isResting && (
+          <Text style={styles.description}>{currentExercise?.description}</Text>
+        )}
+        
+        {/* Next exercise context block */}
+        {nextExercise && (
+           <View style={styles.upNextContainer}>
+             <Text style={styles.upNextLabel}>Up Next</Text>
+             <Text style={styles.upNextText}>{nextExercise.name}</Text>
+           </View>
+        )}
       </View>
+
+      {/* Primary Interaction Controls */}
       <View style={styles.controls}>
-        <TouchableOpacity style={styles.controlBtn} onPress={() => setIsActive(!isActive)}>
-          {isActive ? <Pause color="#fff" size={32}/> : <Play color="#fff" size={32}/>}
+        <TouchableOpacity style={styles.controlBtn} onPress={togglePause}>
+          {isActive ? <Pause color="#fff" size={32} /> : <Play color="#fff" size={32} />}
         </TouchableOpacity>
-        <TouchableOpacity style={styles.controlBtnSecondary} onPress={handleNext}>
+        <TouchableOpacity style={styles.controlBtnSecondary} onPress={skip}>
           <SkipForward color="#fff" size={24} />
         </TouchableOpacity>
       </View>
@@ -76,14 +98,28 @@ export const PlayerScreen = ({ navigation }: any) => {
 
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: COLORS.background },
-  header: { padding: SPACING.md, alignItems: 'center' },
-  progress: { color: COLORS.textSecondary, fontSize: 16, fontWeight: 'bold' },
+  header: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', padding: SPACING.md },
+  streakBadge: { flexDirection: 'row', alignItems: 'center', backgroundColor: COLORS.surface, paddingHorizontal: 10, paddingVertical: 4, borderRadius: 12 },
+  streakText: { color: COLORS.secondary, fontWeight: 'bold', marginLeft: 4, fontSize: 12 },
+  progressText: { color: COLORS.textSecondary, fontSize: 16, fontWeight: 'bold' },
+  progressBarContainer: { height: 4, backgroundColor: COLORS.surface, width: '100%' },
+  progressBarFill: { height: '100%', backgroundColor: COLORS.primary },
+  
   main: { flex: 1, justifyContent: 'center', alignItems: 'center', padding: SPACING.lg },
   stateText: { color: COLORS.secondary, fontSize: 24, fontWeight: 'bold', letterSpacing: 2, marginBottom: SPACING.sm },
   title: { color: COLORS.textPrimary, fontSize: 32, fontWeight: 'bold', textAlign: 'center', marginBottom: SPACING.xl },
-  timerCircle: { width: 200, height: 200, borderRadius: 100, borderWidth: 8, borderColor: COLORS.primary, justifyContent: 'center', alignItems: 'center', marginBottom: SPACING.xl },
-  timerText: { color: COLORS.textPrimary, fontSize: 64, fontWeight: 'bold' },
-  description: { color: COLORS.textSecondary, fontSize: 18, textAlign: 'center' },
+  
+  timerCircle: { width: 220, height: 220, borderRadius: 110, borderWidth: 8, borderColor: COLORS.primary, justifyContent: 'center', alignItems: 'center', marginBottom: SPACING.xl },
+  timerCircleEnding: { borderColor: COLORS.error },
+  timerCircleResting: { borderColor: COLORS.textSecondary },
+  timerText: { color: COLORS.textPrimary, fontSize: 72, fontWeight: 'bold' },
+  timerTextEnding: { color: COLORS.error, fontSize: 96 },
+  
+  description: { color: COLORS.textSecondary, fontSize: 18, textAlign: 'center', marginBottom: SPACING.xl },
+  upNextContainer: { backgroundColor: COLORS.surface, padding: SPACING.md, borderRadius: 12, alignItems: 'center', minWidth: 200 },
+  upNextLabel: { color: COLORS.textSecondary, fontSize: 12, textTransform: 'uppercase', letterSpacing: 1, marginBottom: 4 },
+  upNextText: { color: COLORS.textPrimary, fontSize: 18, fontWeight: '600' },
+  
   controls: { flexDirection: 'row', justifyContent: 'center', alignItems: 'center', paddingBottom: SPACING.xxl, gap: SPACING.lg },
   controlBtn: { backgroundColor: COLORS.primary, width: 80, height: 80, borderRadius: 40, justifyContent: 'center', alignItems: 'center' },
   controlBtnSecondary: { backgroundColor: COLORS.surface, width: 60, height: 60, borderRadius: 30, justifyContent: 'center', alignItems: 'center', borderWidth: 1, borderColor: COLORS.border }

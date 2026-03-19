@@ -5,7 +5,7 @@ import { COLORS, SPACING } from '../../../core/theme/colors';
 import { Award, CheckCircle, Clock } from 'lucide-react-native';
 
 export const ProgressScreen = ({ navigation }: any) => {
-  const { history } = useWorkoutStore();
+  const { history, streak } = useWorkoutStore();
   const user = useUserStore();
 
   const totalMinutes = Math.floor(history.reduce((acc, sess) => acc + sess.duration, 0) / 60);
@@ -18,7 +18,7 @@ export const ProgressScreen = ({ navigation }: any) => {
         <View style={styles.statsRow}>
           <View style={styles.statCard}>
             <Award color={COLORS.secondary} size={32} />
-            <Text style={styles.statValue}>{user.streak}</Text>
+            <Text style={styles.statValue}>{streak}</Text>
             <Text style={styles.statLabel}>Day Streak</Text>
           </View>
           <View style={styles.statCard}>

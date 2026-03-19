@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useState, useEffect } from 'react';
 import { NavigationContainer } from '@react-navigation/native';
 import { createNativeStackNavigator } from '@react-navigation/native-stack';
 import { useUserStore } from '../store';
@@ -11,7 +11,18 @@ import { ProgressScreen } from '../features/progress/screens/ProgressScreen';
 const Stack = createNativeStackNavigator();
 
 export const RootNavigator = () => {
+  const [isHydrated, setIsHydrated] = useState(false);
   const hasCompletedOnboarding = useUserStore(state => state.hasCompletedOnboarding);
+
+  useEffect(() => {
+    const unsub = useUserStore.persist.onFinishHydration(() => setIsHydrated(true));
+    if (useUserStore.persist.hasHydrated()) {
+      setIsHydrated(true);
+    }
+    return () => unsub();
+  }, []);
+
+  if (!isHydrated) return null;
 
   return (
     <NavigationContainer>

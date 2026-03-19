@@ -7,6 +7,7 @@ import { Activity, Flame } from 'lucide-react-native';
 
 export const HomeScreen = ({ navigation }: any) => {
   const user = useUserStore();
+  const streak = useWorkoutStore(state => state.streak);
   const startWorkout = useWorkoutStore((state) => state.startWorkout);
   const [energy, setEnergy] = useState<'low' | 'medium' | 'high'>('medium');
   const [space, setSpace] = useState<'small' | 'medium' | 'large'>('medium');
@@ -16,8 +17,8 @@ export const HomeScreen = ({ navigation }: any) => {
     const exercises = generateWorkout({ durationMinutes: duration, energy, space });
     startWorkout({
       id: Date.now().toString(),
+      date: new Date().toISOString(),
       exercises,
-      completedCount: 0,
       duration: duration * 60,
     });
     navigation.navigate('Player');
@@ -30,7 +31,7 @@ export const HomeScreen = ({ navigation }: any) => {
           <Text style={styles.greeting}>Ready to move?</Text>
           <View style={styles.streakBadge}>
             <Flame color={COLORS.secondary} size={20} />
-            <Text style={styles.streakText}>{user.streak} Day Streak</Text>
+            <Text style={styles.streakText}>{streak} Day Streak</Text>
           </View>
         </View>
 
