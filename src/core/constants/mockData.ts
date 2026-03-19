@@ -11,6 +11,7 @@ export interface Exercise {
   difficulty: Difficulty;
   defaultDuration: number; 
   videoUrl?: string; 
+  image?: string; 
 }
 
 export const EXERCISE_DB: Exercise[] = [

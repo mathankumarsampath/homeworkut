@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import { ActivityIndicator, View } from 'react-native';
 import { NavigationContainer } from '@react-navigation/native';
 import { createNativeStackNavigator } from '@react-navigation/native-stack';
 import { useUserStore } from '../store';
@@ -11,18 +12,40 @@ import { ProgressScreen } from '../features/progress/screens/ProgressScreen';
 const Stack = createNativeStackNavigator();
 
 export const RootNavigator = () => {
+  console.log('[RootNavigator] Render started');
   const [isHydrated, setIsHydrated] = useState(false);
   const hasCompletedOnboarding = useUserStore(state => state.hasCompletedOnboarding);
 
   useEffect(() => {
-    const unsub = useUserStore.persist.onFinishHydration(() => setIsHydrated(true));
+    console.log('[RootNavigator] Initializing Hydration listener...');
+    let isMounted = true;
+    
+    const unsub = useUserStore.persist.onFinishHydration(() => {
+      console.log('[RootNavigator] Hydration complete event fired');
+      if (isMounted) setIsHydrated(true);
+    });
+    
     if (useUserStore.persist.hasHydrated()) {
+      console.log('[RootNavigator] Store already hydrated on mount');
       setIsHydrated(true);
     }
-    return () => unsub();
+    
+    return () => {
+      isMounted = false;
+      unsub();
+    };
   }, []);
 
-  if (!isHydrated) return null;
+  if (!isHydrated) {
+    console.log('[RootNavigator] UI Blocked: Waiting for Hydration...');
+    return (
+      <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center' }}>
+        <ActivityIndicator size="large" />
+      </View>
+    );
+  }
+
+  console.log('[RootNavigator] Hydration cleared. Rendering Navigation Container...');
 
   return (
     <NavigationContainer>

@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react';
 import { useWorkoutStore } from '../../../store';
 import { speak, stopVoice } from '../../../core/utils/voice';
 import { light, medium, success } from '../../../core/utils/haptics';
@@ -16,15 +16,26 @@ export const useWorkoutPlayer = (onComplete: () => void) => {
   const [timeLeft, setTimeLeft] = useState(0);
   const [isActive, setIsActive] = useState(false);
   const [isResting, setIsResting] = useState(false);
+  
+  // Ref for precise timer tracking - avoids drift compared to simple setInterval
+  const timerRef = useRef<NodeJS.Timeout | null>(null);
 
   const currentExercise = currentSession?.exercises[currentIndex];
-  // Look forward for the next drill, ensuring bounds
   const nextExercise = currentSession?.exercises[currentIndex + 1];
   const totalExercises = currentSession?.exercises.length || 0;
   
-  const isFinished = !currentSession || currentIndex >= totalExercises;
+  const isFinished = !currentSession || (currentIndex >= totalExercises && totalExercises > 0);
+  const hasSession = !!currentSession;
 
-  // Automatically reset timers when context shifts
+  // Cleanup timers on unmount
+  useEffect(() => {
+    return () => {
+      if (timerRef.current) clearTimeout(timerRef.current);
+      stopVoice();
+    };
+  }, []);
+
+  // Initialize/Reset timer when drill context shifts
   useEffect(() => {
     if (!currentExercise || isFinished) return;
     
@@ -35,64 +46,70 @@ export const useWorkoutPlayer = (onComplete: () => void) => {
     }
   }, [currentIndex, isResting, currentExercise, isFinished]);
 
-  // Main countdown driver
+  // High-precision countdown engine
   useEffect(() => {
-    let interval: ReturnType<typeof setInterval> | null = null;
-    
     if (isActive && timeLeft > 0) {
-      interval = setInterval(() => setTimeLeft(t => t - 1), 1000);
+      timerRef.current = setTimeout(() => {
+        setTimeLeft(t => t - 1);
+      }, 1000);
     } else if (isActive && timeLeft === 0) {
       handleAutoTransition();
     }
-    
+
     return () => {
-      if (interval) clearInterval(interval);
+      if (timerRef.current) clearTimeout(timerRef.current);
     };
   }, [isActive, timeLeft]);
 
-  // Orchestrates the auto-flow and triggers physical/auditory feedback
-  const handleAutoTransition = () => {
+  const handleAutoTransition = useCallback(() => {
     if (isResting) {
-      // Transition from REST to WORK
+      // REST -> WORK
       setIsResting(false);
       medium();
       if (nextExercise) {
         setCurrentIndex(i => i + 1);
-        speak(`Start ${nextExercise.name}`);
       }
     } else {
-      // Transition from WORK to REST or FINISH
+      // WORK -> REST or FINISH
       if (currentIndex === totalExercises - 1) {
-        // Last exercise completed -> Finish Workout
-        success();
-        const msg = MESSAGES[Math.floor(Math.random() * MESSAGES.length)];
-        speak(`Workout complete. ${msg}`);
+        // FINISH
         setIsActive(false);
         endWorkout();
         onComplete();
       } else {
-        // More exercises -> Go to Rest
+        // WORK -> REST
         setIsResting(true);
-        light();
-        speak(`Rest. Up next, ${nextExercise?.name}`);
       }
     }
-  };
+  }, [isResting, currentIndex, totalExercises, endWorkout, onComplete, currentSession]);
 
   const skip = () => {
-     handleAutoTransition();
+    if (timerRef.current) clearTimeout(timerRef.current);
+    handleAutoTransition();
+  };
+
+  const goToPrevious = () => {
+    if (currentIndex > 0) {
+      if (timerRef.current) clearTimeout(timerRef.current);
+      setIsResting(false);
+      setCurrentIndex(i => i - 1);
+      medium();
+    }
   };
 
   const togglePause = () => {
     if (!isActive) {
-      if (timeLeft === currentExercise?.defaultDuration && currentIndex === 0 && !isResting) {
-        speak(`Starting ${currentExercise.name}`);
-        medium();
-      }
+      // Start sounds moved to screen for unified coaching
     } else {
       stopVoice();
     }
     setIsActive(!isActive);
+  };
+
+  const addRestTime = (seconds: number) => {
+    if (isResting) {
+      setTimeLeft(t => t + seconds);
+    }
   };
 
   return {
@@ -104,8 +121,12 @@ export const useWorkoutPlayer = (onComplete: () => void) => {
     isActive,
     isResting,
     isFinished,
+    hasSession,
     streak,
     skip,
-    togglePause
+    goToPrevious,
+    togglePause,
+    addRestTime
   };
 };
+
