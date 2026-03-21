@@ -1,14 +1,24 @@
 import React, { useState } from 'react';
-import { View, Text, StyleSheet, TouchableOpacity, SafeAreaView, ScrollView } from 'react-native';
-import { useUserStore, useWorkoutStore } from '../../../store';
-import { COLORS, SPACING } from '../../../core/theme/colors';
+import {
+  View, Text, StyleSheet, TouchableOpacity, SafeAreaView, ScrollView,
+  StatusBar
+} from 'react-native';
+import { useWorkoutStore } from '../../../store';
+import { COLORS, SPACING, RADIUS } from '../../../core/theme/colors';
+import { ms, vs, s } from '../../../core/theme/responsive';
 import { generateWorkout } from '../logic/generator';
-import { Activity, Flame } from 'lucide-react-native';
+import {
+  Flame, ChevronRight, TrendingUp, BarChart2, Clock, Play
+} from 'lucide-react-native';
+
+const DAYS = ['M', 'T', 'W', 'T', 'F', 'S', 'S'];
+const TODAY_IDX = new Date().getDay() === 0 ? 6 : new Date().getDay() - 1;
 
 export const HomeScreen = ({ navigation }: any) => {
-  const user = useUserStore();
   const streak = useWorkoutStore(state => state.streak);
+  const history = useWorkoutStore(state => state.history);
   const startWorkout = useWorkoutStore((state) => state.startWorkout);
+
   const [energy, setEnergy] = useState<'low' | 'medium' | 'high'>('medium');
   const [space, setSpace] = useState<'small' | 'medium' | 'large'>('medium');
   const [duration, setDuration] = useState(20);
@@ -24,54 +34,140 @@ export const HomeScreen = ({ navigation }: any) => {
     navigation.navigate('Player');
   };
 
+  const totalWorkouts = history.length;
+  const totalMinutes = Math.floor(history.reduce((acc, s) => acc + s.duration, 0) / 60);
+
   return (
     <SafeAreaView style={styles.container}>
-      <ScrollView contentContainerStyle={styles.scroll}>
+      <StatusBar barStyle="light-content" backgroundColor={COLORS.background} />
+      <ScrollView contentContainerStyle={styles.scroll} showsVerticalScrollIndicator={false}>
+
+        {/* ── HEADER ── */}
         <View style={styles.header}>
-          <Text style={styles.greeting}>Ready to move?</Text>
-          <View style={styles.streakBadge}>
-            <Flame color={COLORS.secondary} size={20} />
-            <Text style={styles.streakText}>{streak} Day Streak</Text>
+          <View>
+            <Text style={styles.greetSub}>Good morning 👋</Text>
+            <Text style={styles.greeting}>Ready to train?</Text>
+          </View>
+          <TouchableOpacity
+            style={styles.progressBtn}
+            onPress={() => navigation.navigate('Progress')}
+            activeOpacity={0.75}
+          >
+            <BarChart2 color={COLORS.primary} size={20} />
+          </TouchableOpacity>
+        </View>
+
+        {/* ── WEEKLY STRIP ── */}
+        <View style={styles.weekCard}>
+          <View style={styles.weekHeader}>
+            <Text style={styles.weekTitle}>Weekly Goal</Text>
+            <View style={styles.streakBadge}>
+              <Flame color={COLORS.secondary} size={14} />
+              <Text style={styles.streakText}>{streak}d streak</Text>
+            </View>
+          </View>
+          <View style={styles.weekDays}>
+            {DAYS.map((d, i) => (
+              <View key={i} style={styles.dayCol}>
+                <Text style={[styles.dayLetter, i === TODAY_IDX && styles.dayLetterActive]}>{d}</Text>
+                <View style={[
+                  styles.dayCircle,
+                  i === TODAY_IDX && styles.dayCircleToday,
+                  i < TODAY_IDX && styles.dayCircleDone,
+                ]}>
+                  {i < TODAY_IDX && <Text style={styles.dayCheck}>✓</Text>}
+                  {i === TODAY_IDX && <Text style={styles.dayNum}>{new Date().getDate()}</Text>}
+                </View>
+              </View>
+            ))}
           </View>
         </View>
 
+        {/* ── QUICK STATS ── */}
+        <View style={styles.statsRow}>
+          <View style={[styles.statCard, { borderColor: COLORS.primary }]}>
+            <TrendingUp color={COLORS.primary} size={20} />
+            <Text style={styles.statVal}>{totalWorkouts}</Text>
+            <Text style={styles.statLbl}>Workouts</Text>
+          </View>
+          <View style={[styles.statCard, { borderColor: COLORS.secondary }]}>
+            <Clock color={COLORS.secondary} size={20} />
+            <Text style={styles.statVal}>{totalMinutes}m</Text>
+            <Text style={styles.statLbl}>Total Time</Text>
+          </View>
+          <View style={[styles.statCard, { borderColor: COLORS.success }]}>
+            <Flame color={COLORS.success} size={20} />
+            <Text style={styles.statVal}>{streak}</Text>
+            <Text style={styles.statLbl}>Day Streak</Text>
+          </View>
+        </View>
+
+        {/* ── BUILD WORKOUT ── */}
+        <Text style={styles.sectionTitle}>Build Your Workout</Text>
+
+        {/* Energy */}
         <View style={styles.card}>
-          <Text style={styles.cardTitle}>Today's Energy</Text>
-          <View style={styles.row}>
-            {['low', 'medium', 'high'].map(lvl => (
-              <TouchableOpacity key={lvl} style={[styles.pill, energy === lvl && styles.pillSelected]} onPress={() => setEnergy(lvl as any)}>
-                <Text style={styles.pillText}>{lvl.toUpperCase()}</Text>
+          <Text style={styles.cardLabel}>Today's Energy</Text>
+          <View style={styles.pillRow}>
+            {(['low', 'medium', 'high'] as const).map(lvl => (
+              <TouchableOpacity
+                key={lvl}
+                style={[styles.pill, energy === lvl && styles.pillActive]}
+                onPress={() => setEnergy(lvl)}
+                activeOpacity={0.7}
+              >
+                <Text style={[styles.pillText, energy === lvl && styles.pillTextActive]}>
+                  {lvl.charAt(0).toUpperCase() + lvl.slice(1)}
+                </Text>
               </TouchableOpacity>
             ))}
           </View>
         </View>
 
+        {/* Space */}
         <View style={styles.card}>
-          <Text style={styles.cardTitle}>Available Space</Text>
-          <View style={styles.row}>
-            {['small', 'medium', 'large'].map(lvl => (
-              <TouchableOpacity key={lvl} style={[styles.pill, space === lvl && styles.pillSelected]} onPress={() => setSpace(lvl as any)}>
-                <Text style={styles.pillText}>{lvl.toUpperCase()}</Text>
+          <Text style={styles.cardLabel}>Available Space</Text>
+          <View style={styles.pillRow}>
+            {(['small', 'medium', 'large'] as const).map(lvl => (
+              <TouchableOpacity
+                key={lvl}
+                style={[styles.pill, space === lvl && styles.pillActive]}
+                onPress={() => setSpace(lvl)}
+                activeOpacity={0.7}
+              >
+                <Text style={[styles.pillText, space === lvl && styles.pillTextActive]}>
+                  {lvl.charAt(0).toUpperCase() + lvl.slice(1)}
+                </Text>
               </TouchableOpacity>
             ))}
           </View>
         </View>
 
+        {/* Duration */}
         <View style={styles.card}>
-          <Text style={styles.cardTitle}>Duration</Text>
-          <View style={styles.row}>
+          <Text style={styles.cardLabel}>Duration</Text>
+          <View style={styles.pillRow}>
             {[10, 20, 30, 45].map(min => (
-              <TouchableOpacity key={min} style={[styles.pill, duration === min && styles.pillSelected]} onPress={() => setDuration(min)}>
-                <Text style={styles.pillText}>{min} min</Text>
+              <TouchableOpacity
+                key={min}
+                style={[styles.pill, duration === min && styles.pillActive]}
+                onPress={() => setDuration(min)}
+                activeOpacity={0.7}
+              >
+                <Text style={[styles.pillText, duration === min && styles.pillTextActive]}>
+                  {min}m
+                </Text>
               </TouchableOpacity>
             ))}
           </View>
         </View>
 
-        <TouchableOpacity style={styles.startButton} onPress={handleStartWorkout}>
-          <Activity color={COLORS.background} size={24} style={{ marginRight: 8 }} />
-          <Text style={styles.startText}>Generate & Start</Text>
+        {/* Start Button */}
+        <TouchableOpacity style={styles.startBtn} onPress={handleStartWorkout} activeOpacity={0.85}>
+          <Play color="#fff" size={22} fill="#fff" />
+          <Text style={styles.startBtnText}>Start Workout</Text>
         </TouchableOpacity>
+
       </ScrollView>
     </SafeAreaView>
   );
@@ -79,17 +175,88 @@ export const HomeScreen = ({ navigation }: any) => {
 
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: COLORS.background },
-  scroll: { padding: SPACING.lg },
-  header: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: SPACING.xl, marginTop: SPACING.md },
-  greeting: { color: COLORS.textPrimary, fontSize: 28, fontWeight: 'bold' },
-  streakBadge: { flexDirection: 'row', alignItems: 'center', backgroundColor: COLORS.surface, paddingHorizontal: 12, paddingVertical: 6, borderRadius: 16, borderWidth: 1, borderColor: '#333' },
-  streakText: { color: COLORS.textPrimary, marginLeft: 6, fontWeight: 'bold' },
-  card: { backgroundColor: COLORS.surface, padding: SPACING.lg, borderRadius: 16, marginBottom: SPACING.lg },
-  cardTitle: { color: COLORS.textSecondary, fontSize: 16, marginBottom: SPACING.md },
-  row: { flexDirection: 'row', flexWrap: 'wrap', gap: 8 },
-  pill: { borderWidth: 1, borderColor: COLORS.border, paddingVertical: 8, paddingHorizontal: 16, borderRadius: 20 },
-  pillSelected: { backgroundColor: COLORS.primary, borderColor: COLORS.primary },
-  pillText: { color: COLORS.textPrimary, fontWeight: '600' },
-  startButton: { backgroundColor: COLORS.primary, padding: SPACING.lg, borderRadius: 30, flexDirection: 'row', justifyContent: 'center', alignItems: 'center', marginTop: SPACING.lg },
-  startText: { color: COLORS.background, fontSize: 18, fontWeight: 'bold' },
+  scroll: { paddingHorizontal: SPACING.lg, paddingBottom: SPACING.xxl },
+
+  // Header
+  header: {
+    flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center',
+    marginTop: SPACING.md, marginBottom: SPACING.lg,
+  },
+  greetSub: { color: COLORS.textSecondary, fontSize: ms(12), marginBottom: 2 },
+  greeting: { color: COLORS.textPrimary, fontSize: ms(22), fontWeight: 'bold' },
+  progressBtn: {
+    width: s(42), height: s(42), borderRadius: s(21),
+    backgroundColor: COLORS.surface, justifyContent: 'center', alignItems: 'center',
+    borderWidth: 1, borderColor: COLORS.border,
+  },
+
+  // Weekly
+  weekCard: {
+    backgroundColor: COLORS.surface, borderRadius: RADIUS.xl,
+    padding: SPACING.lg, marginBottom: SPACING.lg,
+    borderWidth: 1, borderColor: COLORS.border,
+  },
+  weekHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: SPACING.md },
+  weekTitle: { color: COLORS.textPrimary, fontSize: ms(14), fontWeight: '700' },
+  streakBadge: {
+    flexDirection: 'row', alignItems: 'center', gap: 4,
+    backgroundColor: 'rgba(245, 158, 11, 0.12)',
+    paddingHorizontal: 10, paddingVertical: 4, borderRadius: RADIUS.full,
+  },
+  streakText: { color: COLORS.secondary, fontWeight: '700', fontSize: 13 },
+  weekDays: { flexDirection: 'row', justifyContent: 'space-between' },
+  dayCol: { alignItems: 'center', gap: 6 },
+  dayLetter: { color: COLORS.textTertiary, fontSize: 12, fontWeight: '600' },
+  dayLetterActive: { color: COLORS.primary },
+  dayCircle: {
+    width: 34, height: 34, borderRadius: 17,
+    backgroundColor: COLORS.surfaceElevated,
+    alignItems: 'center', justifyContent: 'center',
+  },
+  dayCircleToday: { backgroundColor: COLORS.primary },
+  dayCircleDone: { backgroundColor: COLORS.primaryDim, borderWidth: 1, borderColor: COLORS.primary },
+  dayCheck: { color: COLORS.primary, fontSize: 14, fontWeight: 'bold' },
+  dayNum: { color: '#fff', fontSize: 13, fontWeight: 'bold' },
+
+  // Stats
+  statsRow: { flexDirection: 'row', gap: SPACING.sm, marginBottom: SPACING.lg },
+  statCard: {
+    flex: 1, backgroundColor: COLORS.surface,
+    borderRadius: RADIUS.lg, padding: SPACING.md,
+    alignItems: 'center', gap: 4,
+    borderWidth: 1,
+  },
+  statVal: { color: COLORS.textPrimary, fontSize: 20, fontWeight: 'bold' },
+  statLbl: { color: COLORS.textSecondary, fontSize: 11 },
+
+  // Section
+  sectionTitle: {
+    color: COLORS.textPrimary, fontSize: 18, fontWeight: '700',
+    marginBottom: SPACING.md,
+  },
+
+  // Build cards
+  card: {
+    backgroundColor: COLORS.surface, borderRadius: RADIUS.lg,
+    padding: SPACING.md, marginBottom: SPACING.md,
+    borderWidth: 1, borderColor: COLORS.border,
+  },
+  cardLabel: { color: COLORS.textSecondary, fontSize: 13, fontWeight: '600', marginBottom: SPACING.sm },
+  pillRow: { flexDirection: 'row', flexWrap: 'wrap', gap: 8 },
+  pill: {
+    borderWidth: 1, borderColor: COLORS.border,
+    paddingVertical: 8, paddingHorizontal: 16, borderRadius: RADIUS.full,
+    backgroundColor: COLORS.surfaceElevated,
+  },
+  pillActive: { backgroundColor: COLORS.primaryDim, borderColor: COLORS.primary },
+  pillText: { color: COLORS.textSecondary, fontWeight: '600', fontSize: 13 },
+  pillTextActive: { color: COLORS.primary },
+
+  // Start button
+  startBtn: {
+    flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 10,
+    backgroundColor: COLORS.primary, paddingVertical: 18,
+    borderRadius: RADIUS.full, marginTop: SPACING.md,
+  },
+  startBtnText: { color: '#fff', fontSize: 17, fontWeight: 'bold' },
 });
